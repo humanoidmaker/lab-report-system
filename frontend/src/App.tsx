@@ -8,7 +8,7 @@ import Tests from './pages/Tests';
 import ResultsEntry from './pages/ResultsEntry';
 import Reports from './pages/Reports';
 import Patients from './pages/Patients';
-import Settings from './pages/Settings';
+import Settings from '@/pages/Settings';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('labsync_token');
