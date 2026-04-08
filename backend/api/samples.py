@@ -30,12 +30,15 @@ async def list_samples(
     status: Optional[str] = None,
     date: Optional[str] = None,
     q: Optional[str] = None,
+    priority: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
 ):
     query = {}
     if status:
         query["status"] = status
+    if priority:
+        query["priority"] = priority
     if date:
         try:
             d = datetime.strptime(date, "%Y-%m-%d")
@@ -102,7 +105,7 @@ async def create_sample(data: SampleCreate):
     }
     result = await samples_col.insert_one(doc)
     doc["id"] = str(result.inserted_id)
-    doc["_id"] = doc.pop("_id", None)
+    doc.pop("_id", None)
     doc["patient_id"] = str(doc["patient_id"])
     doc["test_ids"] = [str(t) for t in doc["test_ids"]]
     return doc

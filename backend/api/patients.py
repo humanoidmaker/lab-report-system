@@ -53,6 +53,7 @@ async def search_patients(q: str = Query("")):
     query = {"$or": [
         {"name": {"$regex": q, "$options": "i"}},
         {"phone": {"$regex": q, "$options": "i"}},
+        {"email": {"$regex": q, "$options": "i"}},
     ]}
     cursor = patients_col.find(query).limit(20)
     results = []
@@ -71,7 +72,7 @@ async def get_patient(patient_id: str):
 
 @router.post("/")
 async def create_patient(data: PatientCreate):
-    doc = data.dict()
+    doc = data.model_dump()
     doc["created_at"] = datetime.utcnow()
     doc["updated_at"] = datetime.utcnow()
     result = await patients_col.insert_one(doc)
@@ -82,7 +83,7 @@ async def create_patient(data: PatientCreate):
 
 @router.put("/{patient_id}")
 async def update_patient(patient_id: str, data: PatientUpdate):
-    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     update_data["updated_at"] = datetime.utcnow()
     result = await patients_col.update_one(
         {"_id": ObjectId(patient_id)},

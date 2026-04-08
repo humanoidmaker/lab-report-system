@@ -1,38 +1,49 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from config import MONGODB_URL, DATABASE_NAME
+from datetime import datetime, timezone
 
-client = AsyncIOMotorClient(MONGODB_URL)
-db = client[DATABASE_NAME]
+client = None
+db = None
 
-patients_col = db["patients"]
-tests_col = db["tests"]
-samples_col = db["samples"]
-reports_col = db["reports"]
-users_col = db["users"]
-settings_col = db["settings"]
-counters_col = db["counters"]
+MONGODB_URI = None
+DATABASE_NAME = None
 
 
-async def get_next_sequence(name: str) -> int:
-    result = await counters_col.find_one_and_update(
-        {"_id": name},
-        {"$inc": {"seq": 1}},
-        upsert=True,
-        return_document=True,
-    )
-    return result["seq"]
+async def connect_db():
+    global client, db, MONGODB_URI, DATABASE_NAME
+    import os
+    from dotenv import load_dotenv
+    load_dotenv()
+    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+    DATABASE_NAME = os.getenv("DATABASE_NAME", "lab_reports")
+    client = AsyncIOMotorClient(MONGODB_URI)
+    db = client[DATABASE_NAME]
+    await init_db()
+    return db
+
+
+async def close_db():
+    global client
+    if client:
+        client.close()
+
+
+def get_db():
+    return db
 
 
 async def init_db():
-    await patients_col.create_index("phone")
-    await samples_col.create_index("sample_id", unique=True)
-    await tests_col.create_index("name")
-    await reports_col.create_index("report_number", unique=True)
-    await users_col.create_index("email", unique=True)
+    """Create indexes, seed settings and test types."""
+    # Indexes
+    await db.patients.create_index("phone")
+    await db.samples.create_index("sample_id", unique=True)
+    await db.tests.create_index("name")
+    await db.reports.create_index("report_number", unique=True)
+    await db.users.create_index("email", unique=True)
 
-    existing = await settings_col.find_one({"_id": "app_settings"})
+    # Seed settings
+    existing = await db.settings.find_one({"_id": "app_settings"})
     if not existing:
-        await settings_col.insert_one({
+        await db.settings.insert_one({
             "_id": "app_settings",
             "lab_name": "LabSync Diagnostics",
             "lab_address": "456 Health Complex",
@@ -43,10 +54,9 @@ async def init_db():
             "currency": "INR",
         })
 
-    # Seed 20 test types if empty
-    test_count = await tests_col.count_documents({})
+    # Seed 20 test types
+    test_count = await db.tests.count_documents({})
     if test_count == 0:
-        from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
         tests = [
             {
@@ -65,7 +75,9 @@ async def init_db():
                     {"name": "RDW", "unit": "%", "reference_range_male": "11.5-14.5", "reference_range_female": "11.5-14.5"},
                     {"name": "ESR", "unit": "mm/hr", "reference_range_male": "0-15", "reference_range_female": "0-20"},
                 ],
-                "price": 450, "turnaround_hours": 4, "created_at": now, "updated_at": now,
+                "price": 450,
+                "turnaround_hours": 4,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Blood Sugar Fasting",
@@ -74,7 +86,9 @@ async def init_db():
                 "parameters": [
                     {"name": "Blood Sugar Fasting", "unit": "mg/dL", "reference_range_male": "70-100", "reference_range_female": "70-100"},
                 ],
-                "price": 80, "turnaround_hours": 2, "created_at": now, "updated_at": now,
+                "price": 80,
+                "turnaround_hours": 2,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Blood Sugar PP",
@@ -83,7 +97,9 @@ async def init_db():
                 "parameters": [
                     {"name": "Blood Sugar PP", "unit": "mg/dL", "reference_range_male": "70-140", "reference_range_female": "70-140"},
                 ],
-                "price": 80, "turnaround_hours": 2, "created_at": now, "updated_at": now,
+                "price": 80,
+                "turnaround_hours": 2,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "HbA1c",
@@ -92,7 +108,9 @@ async def init_db():
                 "parameters": [
                     {"name": "HbA1c", "unit": "%", "reference_range_male": "4.0-5.6", "reference_range_female": "4.0-5.6"},
                 ],
-                "price": 400, "turnaround_hours": 6, "created_at": now, "updated_at": now,
+                "price": 400,
+                "turnaround_hours": 6,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Lipid Profile",
@@ -106,7 +124,9 @@ async def init_db():
                     {"name": "VLDL Cholesterol", "unit": "mg/dL", "reference_range_male": "<30", "reference_range_female": "<30"},
                     {"name": "Total/HDL Ratio", "unit": "", "reference_range_male": "<4.5", "reference_range_female": "<4.5"},
                 ],
-                "price": 550, "turnaround_hours": 6, "created_at": now, "updated_at": now,
+                "price": 550,
+                "turnaround_hours": 6,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Liver Function Test (LFT)",
@@ -122,7 +142,9 @@ async def init_db():
                     {"name": "Albumin", "unit": "g/dL", "reference_range_male": "3.5-5.0", "reference_range_female": "3.5-5.0"},
                     {"name": "Globulin", "unit": "g/dL", "reference_range_male": "2.0-3.5", "reference_range_female": "2.0-3.5"},
                 ],
-                "price": 650, "turnaround_hours": 6, "created_at": now, "updated_at": now,
+                "price": 650,
+                "turnaround_hours": 6,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Kidney Function Test (KFT)",
@@ -135,7 +157,9 @@ async def init_db():
                     {"name": "BUN", "unit": "mg/dL", "reference_range_male": "7-20", "reference_range_female": "7-20"},
                     {"name": "eGFR", "unit": "mL/min/1.73m2", "reference_range_male": ">90", "reference_range_female": ">90"},
                 ],
-                "price": 500, "turnaround_hours": 6, "created_at": now, "updated_at": now,
+                "price": 500,
+                "turnaround_hours": 6,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Thyroid Profile",
@@ -146,7 +170,9 @@ async def init_db():
                     {"name": "T4 (Thyroxine)", "unit": "mcg/dL", "reference_range_male": "4.5-12.0", "reference_range_female": "4.5-12.0"},
                     {"name": "TSH", "unit": "mIU/L", "reference_range_male": "0.4-4.0", "reference_range_female": "0.4-4.0"},
                 ],
-                "price": 600, "turnaround_hours": 8, "created_at": now, "updated_at": now,
+                "price": 600,
+                "turnaround_hours": 8,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Urine Routine & Microscopy",
@@ -164,7 +190,9 @@ async def init_db():
                     {"name": "WBC", "unit": "/hpf", "reference_range_male": "0-5", "reference_range_female": "0-5"},
                     {"name": "Epithelial Cells", "unit": "/hpf", "reference_range_male": "0-5", "reference_range_female": "0-5"},
                 ],
-                "price": 200, "turnaround_hours": 3, "created_at": now, "updated_at": now,
+                "price": 200,
+                "turnaround_hours": 3,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Vitamin D (25-OH)",
@@ -173,7 +201,9 @@ async def init_db():
                 "parameters": [
                     {"name": "Vitamin D (25-OH)", "unit": "ng/mL", "reference_range_male": "30-100", "reference_range_female": "30-100"},
                 ],
-                "price": 900, "turnaround_hours": 12, "created_at": now, "updated_at": now,
+                "price": 900,
+                "turnaround_hours": 12,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Vitamin B12",
@@ -182,7 +212,9 @@ async def init_db():
                 "parameters": [
                     {"name": "Vitamin B12", "unit": "pg/mL", "reference_range_male": "200-900", "reference_range_female": "200-900"},
                 ],
-                "price": 800, "turnaround_hours": 12, "created_at": now, "updated_at": now,
+                "price": 800,
+                "turnaround_hours": 12,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Iron Studies",
@@ -194,7 +226,9 @@ async def init_db():
                     {"name": "Transferrin Saturation", "unit": "%", "reference_range_male": "20-50", "reference_range_female": "20-50"},
                     {"name": "Ferritin", "unit": "ng/mL", "reference_range_male": "20-250", "reference_range_female": "10-120"},
                 ],
-                "price": 750, "turnaround_hours": 8, "created_at": now, "updated_at": now,
+                "price": 750,
+                "turnaround_hours": 8,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Blood Group & Rh Typing",
@@ -204,7 +238,9 @@ async def init_db():
                     {"name": "Blood Group (ABO)", "unit": "", "reference_range_male": "A/B/AB/O", "reference_range_female": "A/B/AB/O"},
                     {"name": "Rh Factor", "unit": "", "reference_range_male": "Positive/Negative", "reference_range_female": "Positive/Negative"},
                 ],
-                "price": 150, "turnaround_hours": 2, "created_at": now, "updated_at": now,
+                "price": 150,
+                "turnaround_hours": 2,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Widal Test",
@@ -216,7 +252,9 @@ async def init_db():
                     {"name": "S. Paratyphi AH", "unit": "", "reference_range_male": "<1:80", "reference_range_female": "<1:80"},
                     {"name": "S. Paratyphi BH", "unit": "", "reference_range_male": "<1:80", "reference_range_female": "<1:80"},
                 ],
-                "price": 300, "turnaround_hours": 4, "created_at": now, "updated_at": now,
+                "price": 300,
+                "turnaround_hours": 4,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Dengue NS1 Antigen",
@@ -225,7 +263,9 @@ async def init_db():
                 "parameters": [
                     {"name": "Dengue NS1 Antigen", "unit": "", "reference_range_male": "Negative", "reference_range_female": "Negative"},
                 ],
-                "price": 600, "turnaround_hours": 4, "created_at": now, "updated_at": now,
+                "price": 600,
+                "turnaround_hours": 4,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "C-Reactive Protein (CRP)",
@@ -234,7 +274,9 @@ async def init_db():
                 "parameters": [
                     {"name": "CRP (Quantitative)", "unit": "mg/L", "reference_range_male": "<6", "reference_range_female": "<6"},
                 ],
-                "price": 350, "turnaround_hours": 4, "created_at": now, "updated_at": now,
+                "price": 350,
+                "turnaround_hours": 4,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "HIV I & II (Serology)",
@@ -243,7 +285,9 @@ async def init_db():
                 "parameters": [
                     {"name": "HIV I & II Antibody", "unit": "", "reference_range_male": "Non-Reactive", "reference_range_female": "Non-Reactive"},
                 ],
-                "price": 400, "turnaround_hours": 6, "created_at": now, "updated_at": now,
+                "price": 400,
+                "turnaround_hours": 6,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "HBsAg (Hepatitis B)",
@@ -252,7 +296,9 @@ async def init_db():
                 "parameters": [
                     {"name": "HBsAg", "unit": "", "reference_range_male": "Non-Reactive", "reference_range_female": "Non-Reactive"},
                 ],
-                "price": 350, "turnaround_hours": 6, "created_at": now, "updated_at": now,
+                "price": 350,
+                "turnaround_hours": 6,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Blood Urea Nitrogen",
@@ -261,7 +307,9 @@ async def init_db():
                 "parameters": [
                     {"name": "Blood Urea Nitrogen", "unit": "mg/dL", "reference_range_male": "7-20", "reference_range_female": "7-20"},
                 ],
-                "price": 120, "turnaround_hours": 3, "created_at": now, "updated_at": now,
+                "price": 120,
+                "turnaround_hours": 3,
+                "created_at": now, "updated_at": now,
             },
             {
                 "name": "Serum Electrolytes",
@@ -272,7 +320,9 @@ async def init_db():
                     {"name": "Potassium", "unit": "mEq/L", "reference_range_male": "3.5-5.0", "reference_range_female": "3.5-5.0"},
                     {"name": "Chloride", "unit": "mEq/L", "reference_range_male": "98-106", "reference_range_female": "98-106"},
                 ],
-                "price": 450, "turnaround_hours": 4, "created_at": now, "updated_at": now,
+                "price": 450,
+                "turnaround_hours": 4,
+                "created_at": now, "updated_at": now,
             },
         ]
-        await tests_col.insert_many(tests)
+        await db.tests.insert_many(tests)

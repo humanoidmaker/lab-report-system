@@ -76,7 +76,7 @@ async def get_test(test_id: str):
 
 @router.post("/")
 async def create_test(data: TestCreate):
-    doc = data.dict()
+    doc = data.model_dump()
     doc["created_at"] = datetime.utcnow()
     doc["updated_at"] = datetime.utcnow()
     result = await tests_col.insert_one(doc)
@@ -87,7 +87,7 @@ async def create_test(data: TestCreate):
 
 @router.put("/{test_id}")
 async def update_test(test_id: str, data: TestUpdate):
-    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     update_data["updated_at"] = datetime.utcnow()
     result = await tests_col.update_one(
         {"_id": ObjectId(test_id)},
